@@ -73,13 +73,7 @@
   .live-change.up { color: var(--green); }
   .live-change.down { color: var(--red); }
   .live-meta { color: var(--muted); font-size: 0.65rem; margin-left: auto; }
-  .live-spinner {
-    width: 14px; height: 14px; border-radius: 50%;
-    border: 2px solid rgba(245,200,66,0.2);
-    border-top-color: var(--gold);
-    animation: spin 0.8s linear infinite;
-    display: none;
-  }
+
 
   /* ── FILTERS ── */
   .filters {
@@ -164,22 +158,32 @@
 
   <!-- HEADER -->
   <div class="header">
-    <div class="tag"><span class="dot"></span> Datos en tiempo real · Actualización automática</div>
+    <div class="tag"><span class="dot"></span> Actualización quincenal · Datos verificados</div>
     <h1>Previsión Precio <span>Crudo Brent</span> 2026</h1>
     <p class="subtitle">Consenso de mercado (EIA · Goldman Sachs · IEA) vs. escenarios de análisis propio · USD/barril</p>
   </div>
 
-  <!-- LIVE PRICE BAR -->
+  <!-- PRICE BAR -->
   <div class="live-bar">
     <div>
-      <div class="live-label">Brent Crude · Precio en vivo</div>
+      <div class="live-label">Brent Crude · Último precio registrado</div>
       <div style="display:flex;align-items:baseline;gap:10px;margin-top:2px;">
-        <div class="live-price" id="livePrice">—</div>
-        <div class="live-change" id="liveChange">cargando…</div>
+        <div class="live-price" id="livePrice">$102.00</div>
+        <div class="live-change up" id="liveChange">+30.00 (+41.7%) desde 28 Feb</div>
       </div>
     </div>
-    <div class="live-spinner" id="spinner"></div>
-    <div class="live-meta" id="liveMeta">Fuente: Frankfurter / stooq</div>
+    <div style="margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+      <div class="live-meta" id="liveMeta">Actualizado: 15 Mar 2026</div>
+      <a href="https://finance.yahoo.com/quote/BZ=F/" target="_blank"
+        style="font-size:0.65rem;padding:4px 10px;border-radius:5px;
+               background:rgba(245,200,66,0.12);color:var(--gold);
+               border:1px solid rgba(245,200,66,0.3);text-decoration:none;
+               white-space:nowrap;"
+        onmouseover="this.style.background='rgba(245,200,66,0.25)'"
+        onmouseout="this.style.background='rgba(245,200,66,0.12)'">
+        Ver cotización en vivo ↗
+      </a>
+    </div>
   </div>
 
   <!-- FILTERS -->
@@ -427,81 +431,12 @@ function setScenario(key, el) {
   myChart.update();
 }
 
-// ─── PRECIO EN TIEMPO REAL ─────────────────────────────────────────────────
-// Estrategia con 3 fuentes en cascada:
-//   1. corsproxy.io → stooq.com  (CSV, sin API key)
-//   2. allorigins.win → stooq.com (backup proxy)
-//   3. Dato estático de referencia (último recurso)
-
-function updateUI(price, open, dateStr, source) {
-  const change = price - open;
-  const pct    = ((change / open) * 100).toFixed(2);
-  const sign   = change >= 0 ? '+' : '';
-  document.getElementById('livePrice').textContent = `$${price.toFixed(2)}`;
-  const chEl = document.getElementById('liveChange');
-  chEl.textContent = `${sign}${change.toFixed(2)} (${sign}${pct}%) hoy`;
-  chEl.className = `live-change ${change >= 0 ? 'up' : 'down'}`;
-  document.getElementById('liveMeta').textContent = `${source} · ${dateStr}`;
-  document.getElementById('cardPrice').textContent = `$${price.toFixed(2)}`;
-  myChart.data.datasets[0].data[5] = price;
-  myChart.update();
-}
-
-function parseStooqCSV(text) {
-  const lines = text.trim().split('\n');
-  if (lines.length < 2) throw new Error('Sin datos');
-  const cols = lines[1].split(',');
-  // cols: Symbol, Date, Time, Open, High, Low, Close, Volume
-  const price = parseFloat(cols[6]);
-  const open  = parseFloat(cols[3]);
-  const date  = cols[1];
-  if (isNaN(price) || price <= 0) throw new Error('Precio inválido');
-  return { price, open, date };
-}
-
-async function tryCorsproxy() {
-  const target = encodeURIComponent('https://stooq.com/q/l/?s=bz.f&f=sd2t2ohlcv&e=csv');
-  const res    = await fetch(`https://corsproxy.io/?url=${target}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const text = await res.text();
-  const { price, open, date } = parseStooqCSV(text);
-  updateUI(price, open, date, 'stooq.com vía corsproxy.io');
-}
-
-async function tryAllOrigins() {
-  const target = encodeURIComponent('https://stooq.com/q/l/?s=bz.f&f=sd2t2ohlcv&e=csv');
-  const res    = await fetch(`https://api.allorigins.win/raw?url=${target}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const text = await res.text();
-  const { price, open, date } = parseStooqCSV(text);
-  updateUI(price, open, date, 'stooq.com vía allorigins.win');
-}
-
-async function fetchLivePrice() {
-  const spinner = document.getElementById('spinner');
-  spinner.style.display = 'block';
-
-  try {
-    await tryCorsproxy();
-  } catch (e1) {
-    console.warn('Proxy 1 falló:', e1.message, '· Probando proxy 2…');
-    try {
-      await tryAllOrigins();
-    } catch (e2) {
-      console.warn('Proxy 2 falló:', e2.message, '· Usando dato de referencia.');
-      document.getElementById('livePrice').textContent = '~$102';
-      document.getElementById('liveChange').textContent = '⚠ Datos en vivo no disponibles ahora';
-      document.getElementById('liveChange').className = 'live-change';
-      document.getElementById('liveMeta').textContent = 'Dato de referencia · 16 Mar 2026';
-    }
-  } finally {
-    spinner.style.display = 'none';
-  }
-}
-
-// Carga inmediata + refresco cada 5 minutos
-fetchLivePrice();
-setInterval(fetchLivePrice, 5 * 60 * 1000);
+// ─── NOTA SOBRE PRECIO EN VIVO ────────────────────────────────────────────
+// Las APIs públicas de crudo (stooq, Yahoo Finance) bloquean peticiones
+// desde el navegador por política CORS. Los proxies públicos gratuitos
+// (corsproxy.io, allorigins.win) son inestables y no son fiables.
+// Solución adoptada: precio actualizado manualmente cada quincena
+// junto con los datos reales de la gráfica + enlace directo a Yahoo Finance.
 </script>
 </body>
 </html>

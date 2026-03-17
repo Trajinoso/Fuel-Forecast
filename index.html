@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Previsión Precio Combustible 2026</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #060c18;
+    --surface: #0d1625;
+    --border: #1a2740;
+    --gold: #f5c842;
+    --blue: #4a9eff;
+    --green: #2ecc8e;
+    --orange: #ff7143;
+    --red: #ef4444;
+    --text: #c8d8f0;
+    --muted: #4a637a;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    padding: 2rem 1.5rem;
+    background-image:
+      radial-gradient(ellipse 60% 40% at 80% 10%, rgba(74,158,255,0.06) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 30% at 20% 80%, rgba(245,200,66,0.05) 0%, transparent 50%);
+  }
+
+  .wrap { max-width: 940px; margin: 0 auto; }
+
+  /* ── HEADER ── */
+  .header { margin-bottom: 1.8rem; animation: fadeUp 0.5s ease both; }
+  .tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(245,200,66,0.1); color: var(--gold);
+    border: 1px solid rgba(245,200,66,0.25);
+    padding: 4px 12px; border-radius: 20px;
+    font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase;
+    margin-bottom: 0.8rem;
+  }
+  .tag .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--gold);
+    animation: pulse 2s infinite;
+  }
+  h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(1.5rem, 4vw, 2.2rem);
+    font-weight: 800; color: #fff; line-height: 1.1; margin-bottom: 0.4rem;
+  }
+  h1 span { color: var(--gold); }
+  .subtitle { color: var(--muted); font-size: 0.75rem; }
+
+  /* ── LIVE PRICE BAR ── */
+  .live-bar {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    background: var(--surface); border: 1px solid var(--border);
+    border-left: 3px solid var(--gold);
+    border-radius: 10px; padding: 0.85rem 1.1rem;
+    margin-bottom: 1.25rem;
+    animation: fadeUp 0.5s 0.1s ease both;
+  }
+  .live-label { color: var(--muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; }
+  .live-price { font-family: 'Syne', sans-serif; font-size: 1.6rem; font-weight: 800; color: var(--gold); }
+  .live-change { font-size: 0.78rem; }
+  .live-change.up { color: var(--green); }
+  .live-change.down { color: var(--red); }
+  .live-meta { color: var(--muted); font-size: 0.65rem; margin-left: auto; }
+  .live-spinner {
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid rgba(245,200,66,0.2);
+    border-top-color: var(--gold);
+    animation: spin 0.8s linear infinite;
+    display: none;
+  }
+
+  /* ── FILTERS ── */
+  .filters {
+    display: flex; gap: 8px; flex-wrap: wrap;
+    margin-bottom: 1.1rem;
+    animation: fadeUp 0.5s 0.15s ease both;
+  }
+  .btn {
+    padding: 6px 14px; border-radius: 6px;
+    font-size: 0.7rem; font-family: 'DM Mono', monospace;
+    cursor: pointer; border: 1px solid var(--border);
+    background: transparent; color: var(--muted);
+    transition: all 0.18s; letter-spacing: 0.04em;
+  }
+  .btn:hover { border-color: #4a637a; color: var(--text); }
+  .btn.a-all  { background: var(--gold); color: #000; border-color: var(--gold); }
+  .btn.a-mkt  { background: rgba(74,158,255,0.15); color: var(--blue); border-color: var(--blue); }
+  .btn.a-bear { background: rgba(46,204,142,0.15); color: var(--green); border-color: var(--green); }
+  .btn.a-bull { background: rgba(255,113,67,0.15); color: var(--orange); border-color: var(--orange); }
+
+  /* ── CHART ── */
+  .chart-box {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 1.5rem;
+    animation: fadeUp 0.5s 0.2s ease both;
+  }
+  .chart-wrap { position: relative; height: 380px; }
+
+  /* ── CARDS ── */
+  .cards {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr));
+    gap: 12px; margin-top: 1.2rem;
+    animation: fadeUp 0.5s 0.3s ease both;
+  }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 1rem;
+    border-left: 3px solid var(--border);
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+  .c-gold { border-left-color: var(--gold); }
+  .c-blue { border-left-color: var(--blue); }
+  .c-green { border-left-color: var(--green); }
+  .c-orange { border-left-color: var(--orange); }
+  .card-title { font-size: 0.65rem; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 5px; }
+  .c-gold .card-title { color: var(--gold); }
+  .c-blue .card-title { color: var(--blue); }
+  .c-green .card-title { color: var(--green); }
+  .c-orange .card-title { color: var(--orange); }
+  .card-val { font-family: 'Syne', sans-serif; font-size: 1.45rem; font-weight: 800; color: #fff; margin-bottom: 4px; }
+  .card-desc { color: var(--muted); font-size: 0.69rem; line-height: 1.55; }
+  .prob { display: inline-block; font-size: 0.62rem; padding: 2px 7px; border-radius: 3px; margin-top: 5px; }
+  .c-green .prob { background: rgba(46,204,142,0.1); color: var(--green); }
+  .c-orange .prob { background: rgba(255,113,67,0.1); color: var(--orange); }
+  .c-blue .prob  { background: rgba(74,158,255,0.1); color: var(--blue); }
+
+  /* ── FOOTER ── */
+  .footer {
+    margin-top: 1.5rem; color: var(--muted);
+    font-size: 0.62rem; text-align: center; line-height: 1.7;
+    animation: fadeUp 0.5s 0.4s ease both;
+  }
+  .footer a { color: #4a637a; text-decoration: none; }
+  .footer a:hover { color: var(--text); }
+
+  /* ── DISCLAIMER ── */
+  .disclaimer {
+    margin-top: 0.6rem;
+    background: rgba(239,68,68,0.05); border: 1px solid rgba(239,68,68,0.15);
+    border-radius: 8px; padding: 0.6rem 0.9rem;
+    font-size: 0.62rem; color: rgba(239,68,68,0.7); text-align: center;
+  }
+
+  @keyframes fadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes pulse  { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  @keyframes spin   { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="tag"><span class="dot"></span> Datos en tiempo real · Actualización automática</div>
+    <h1>Previsión Precio <span>Crudo Brent</span> 2026</h1>
+    <p class="subtitle">Consenso de mercado (EIA · Goldman Sachs · IEA) vs. escenarios de análisis propio · USD/barril</p>
+  </div>
+
+  <!-- LIVE PRICE BAR -->
+  <div class="live-bar">
+    <div>
+      <div class="live-label">Brent Crude · Precio en vivo</div>
+      <div style="display:flex;align-items:baseline;gap:10px;margin-top:2px;">
+        <div class="live-price" id="livePrice">—</div>
+        <div class="live-change" id="liveChange">cargando…</div>
+      </div>
+    </div>
+    <div class="live-spinner" id="spinner"></div>
+    <div class="live-meta" id="liveMeta">Fuente: Frankfurter / stooq</div>
+  </div>
+
+  <!-- FILTERS -->
+  <div class="filters">
+    <button class="btn a-all" onclick="setScenario('all',this)">Todos los escenarios</button>
+    <button class="btn" onclick="setScenario('mkt',this)">📊 Mercado (EIA/GS)</button>
+    <button class="btn" onclick="setScenario('bear',this)">🟢 Bajista</button>
+    <button class="btn" onclick="setScenario('bull',this)">🔴 Alcista</button>
+  </div>
+
+  <!-- CHART -->
+  <div class="chart-box">
+    <div class="chart-wrap">
+      <canvas id="fuelChart"></canvas>
+    </div>
+  </div>
+
+  <!-- CARDS -->
+  <div class="cards">
+    <div class="card c-gold">
+      <div class="card-title">Precio actual Brent</div>
+      <div class="card-val" id="cardPrice">~$102</div>
+      <div class="card-desc">Actualizado automáticamente. Subida ~40% desde inicio del conflicto Irán (28 Feb 2026).</div>
+    </div>
+    <div class="card c-blue">
+      <div class="card-title">Previsión mercado</div>
+      <div class="card-val">$64–88</div>
+      <div class="card-desc">Normalización progresiva asumiendo aumento de producción OPEC+ y sin escalada adicional.</div>
+      <span class="prob">Escenario base institucional</span>
+    </div>
+    <div class="card c-green">
+      <div class="card-title">Escenario bajista</div>
+      <div class="card-val">$54/b dic</div>
+      <div class="card-desc">Acuerdo diplomático rápido + señales de recesión global. Caída acelerada en H2 2026.</div>
+      <span class="prob">Probabilidad estimada: ~25%</span>
+    </div>
+    <div class="card c-orange">
+      <div class="card-title">Escenario alcista</div>
+      <div class="card-val">&gt;$100/b</div>
+      <div class="card-desc">Cierre parcial Estrecho de Ormuz o escalada a Arabia Saudí. Precios sostenidos sobre $100/b.</div>
+      <span class="prob">Probabilidad estimada: ~30%</span>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    Fuentes: EIA Short-Term Energy Outlook · Goldman Sachs Commodities · IEA Oil Market Report · stooq.com (datos en tiempo real)<br>
+    Precio en vivo vía <a href="https://stooq.com" target="_blank">stooq.com</a> · Se actualiza cada vez que abres la página y cada 5 minutos
+    <div class="disclaimer">
+      ⚠️ Este dashboard es de carácter informativo y no constituye asesoramiento financiero. Los escenarios de análisis propio son orientativos.
+    </div>
+  </div>
+
+</div><!-- /wrap -->
+
+<script>
+// ─── DATOS DE LA GRÁFICA (granularidad quincenal) ─────────────────────────
+// Cada punto = ~15 días. 24 puntos = año completo 2026
+const labels = [
+  "1 Ene","15 Ene",
+  "1 Feb","15 Feb",
+  "1 Mar","15 Mar",   // ← hoy ~16 Mar
+  "1 Abr","15 Abr",
+  "1 May","15 May",
+  "1 Jun","15 Jun",
+  "1 Jul","15 Jul",
+  "1 Ago","15 Ago",
+  "1 Sep","15 Sep",
+  "1 Oct","15 Oct",
+  "1 Nov","15 Nov",
+  "1 Dic","15 Dic"
+];
+
+// Datos reales conocidos (hasta hoy 16 Mar 2026), el resto null
+const realData = [
+  65, 67,        // Ene
+  70, 72,        // Feb  — escalada previa al conflicto
+  79, 102,       // Mar  — 28 Feb: inicio guerra Irán → disparo a ~$120, retrocede a ~$102
+  null, null,    // Abr
+  null, null,    // May
+  null, null,    // Jun
+  null, null,    // Jul
+  null, null,    // Ago
+  null, null,    // Sep
+  null, null,    // Oct
+  null, null,    // Nov
+  null, null,    // Dic
+];
+
+// Previsión consenso mercado (EIA / Goldman Sachs / IEA)
+const mktData = [
+  65,  67,
+  70,  68,
+  76,  95,
+  91,  88,
+  85,  82,
+  79,  77,
+  76,  74,
+  73,  72,
+  71,  70,
+  69,  68,
+  67,  66,
+  65,  64
+];
+
+// Escenario bajista propio — paz negociada + recesión global
+const bearData = [
+  65,  67,
+  70,  70,
+  80,  88,
+  78,  70,
+  67,  65,
+  63,  62,
+  61,  60,
+  59,  58,
+  57,  57,
+  56,  56,
+  55,  55,
+  54,  54
+];
+
+// Escenario alcista propio — cierre Ormuz / conflicto prolongado
+const bullData = [
+  65,  67,
+  70,  75,
+  90, 118,
+ 115, 112,
+ 108, 104,
+  99,  95,
+  90,  86,
+  83,  80,
+  78,  76,
+  74,  72,
+  70,  68,
+  66,  64
+];
+
+// ─── CHART.JS SETUP ────────────────────────────────────────────────────────
+const warLinePlugin = {
+  id: 'warLine',
+  afterDraw(chart) {
+    const { ctx, chartArea, scales } = chart;
+    const xIndex = labels.indexOf('15 Mar');
+    const x = scales.x.getPixelForValue(xIndex);
+    ctx.save();
+    ctx.beginPath();
+    ctx.setLineDash([5, 5]);
+    ctx.strokeStyle = 'rgba(239,68,68,0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.moveTo(x, chartArea.top);
+    ctx.lineTo(x, chartArea.bottom);
+    ctx.stroke();
+    // Label
+    ctx.fillStyle = 'rgba(239,68,68,0.7)';
+    ctx.font = '10px DM Mono, monospace';
+    ctx.fillText('⚡ Guerra Irán 28 Feb', x + 5, chartArea.top + 14);
+    ctx.restore();
+  }
+};
+
+const myChart = new Chart(document.getElementById('fuelChart').getContext('2d'), {
+  type: 'line',
+  data: {
+    labels,
+    datasets: [
+      {
+        label: 'Precio real Brent',
+        data: realData,
+        borderColor: '#f5c842', backgroundColor: 'rgba(245,200,66,0.06)',
+        borderWidth: 3, tension: 0.35,
+        pointRadius: 5, pointBackgroundColor: '#f5c842',
+        pointBorderColor: '#060c18', pointBorderWidth: 2,
+        fill: false, spanGaps: false,
+      },
+      {
+        label: 'Previsión mercado (EIA/GS/IEA)',
+        data: mktData,
+        borderColor: '#4a9eff', borderDash: [8,4],
+        borderWidth: 2, tension: 0.35,
+        pointRadius: 3, pointBackgroundColor: '#4a9eff',
+        fill: false,
+      },
+      {
+        label: 'Bajista — paz negociada + recesión',
+        data: bearData,
+        borderColor: '#2ecc8e', borderDash: [5,4],
+        borderWidth: 2, tension: 0.35,
+        pointRadius: 3, pointBackgroundColor: '#2ecc8e',
+        fill: false,
+      },
+      {
+        label: 'Alcista — conflicto prolongado / Ormuz',
+        data: bullData,
+        borderColor: '#ff7143', borderDash: [5,4],
+        borderWidth: 2, tension: 0.35,
+        pointRadius: 3, pointBackgroundColor: '#ff7143',
+        fill: false,
+      },
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: {
+        labels: {
+          color: '#7a9bb8', font: { family: 'DM Mono', size: 11 },
+          boxWidth: 28, padding: 16, usePointStyle: true,
+        }
+      },
+      tooltip: {
+        backgroundColor: '#0d1625', borderColor: '#1a2740', borderWidth: 1,
+        titleColor: '#c8d8f0', bodyColor: '#7a9bb8',
+        titleFont: { family: 'DM Mono', size: 12 },
+        bodyFont:  { family: 'DM Mono', size: 11 },
+        padding: 12,
+        callbacks: {
+          label: c => c.parsed.y != null ? ` ${c.dataset.label}: $${c.parsed.y}/b` : null
+        }
+      }
+    },
+    scales: {
+      x: { grid: { color: 'rgba(26,39,64,0.8)' }, ticks: { color:'#4a637a', font:{family:'DM Mono',size:11} } },
+      y: {
+        min: 50, max: 130,
+        grid: { color: 'rgba(26,39,64,0.8)' },
+        ticks: { color:'#4a637a', font:{family:'DM Mono',size:11}, callback: v => `$${v}` }
+      }
+    }
+  },
+  plugins: [warLinePlugin]
+});
+
+// ─── FILTER BUTTONS ────────────────────────────────────────────────────────
+function setScenario(key, el) {
+  document.querySelectorAll('.btn').forEach(b => b.className = 'btn');
+  el.classList.add(`a-${key}`);
+  const vis = {
+    all:  [true,true,true,true],
+    mkt:  [true,true,false,false],
+    bear: [true,false,true,false],
+    bull: [true,false,false,true],
+  };
+  vis[key].forEach((v,i) => { myChart.data.datasets[i].hidden = !v; });
+  myChart.update();
+}
+
+// ─── PRECIO EN TIEMPO REAL ─────────────────────────────────────────────────
+// Estrategia con 3 fuentes en cascada:
+//   1. corsproxy.io → stooq.com  (CSV, sin API key)
+//   2. allorigins.win → stooq.com (backup proxy)
+//   3. Dato estático de referencia (último recurso)
+
+function updateUI(price, open, dateStr, source) {
+  const change = price - open;
+  const pct    = ((change / open) * 100).toFixed(2);
+  const sign   = change >= 0 ? '+' : '';
+  document.getElementById('livePrice').textContent = `$${price.toFixed(2)}`;
+  const chEl = document.getElementById('liveChange');
+  chEl.textContent = `${sign}${change.toFixed(2)} (${sign}${pct}%) hoy`;
+  chEl.className = `live-change ${change >= 0 ? 'up' : 'down'}`;
+  document.getElementById('liveMeta').textContent = `${source} · ${dateStr}`;
+  document.getElementById('cardPrice').textContent = `$${price.toFixed(2)}`;
+  myChart.data.datasets[0].data[5] = price;
+  myChart.update();
+}
+
+function parseStooqCSV(text) {
+  const lines = text.trim().split('\n');
+  if (lines.length < 2) throw new Error('Sin datos');
+  const cols = lines[1].split(',');
+  // cols: Symbol, Date, Time, Open, High, Low, Close, Volume
+  const price = parseFloat(cols[6]);
+  const open  = parseFloat(cols[3]);
+  const date  = cols[1];
+  if (isNaN(price) || price <= 0) throw new Error('Precio inválido');
+  return { price, open, date };
+}
+
+async function tryCorsproxy() {
+  const target = encodeURIComponent('https://stooq.com/q/l/?s=bz.f&f=sd2t2ohlcv&e=csv');
+  const res    = await fetch(`https://corsproxy.io/?url=${target}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const text = await res.text();
+  const { price, open, date } = parseStooqCSV(text);
+  updateUI(price, open, date, 'stooq.com vía corsproxy.io');
+}
+
+async function tryAllOrigins() {
+  const target = encodeURIComponent('https://stooq.com/q/l/?s=bz.f&f=sd2t2ohlcv&e=csv');
+  const res    = await fetch(`https://api.allorigins.win/raw?url=${target}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const text = await res.text();
+  const { price, open, date } = parseStooqCSV(text);
+  updateUI(price, open, date, 'stooq.com vía allorigins.win');
+}
+
+async function fetchLivePrice() {
+  const spinner = document.getElementById('spinner');
+  spinner.style.display = 'block';
+
+  try {
+    await tryCorsproxy();
+  } catch (e1) {
+    console.warn('Proxy 1 falló:', e1.message, '· Probando proxy 2…');
+    try {
+      await tryAllOrigins();
+    } catch (e2) {
+      console.warn('Proxy 2 falló:', e2.message, '· Usando dato de referencia.');
+      document.getElementById('livePrice').textContent = '~$102';
+      document.getElementById('liveChange').textContent = '⚠ Datos en vivo no disponibles ahora';
+      document.getElementById('liveChange').className = 'live-change';
+      document.getElementById('liveMeta').textContent = 'Dato de referencia · 16 Mar 2026';
+    }
+  } finally {
+    spinner.style.display = 'none';
+  }
+}
+
+// Carga inmediata + refresco cada 5 minutos
+fetchLivePrice();
+setInterval(fetchLivePrice, 5 * 60 * 1000);
+</script>
+</body>
+</html>

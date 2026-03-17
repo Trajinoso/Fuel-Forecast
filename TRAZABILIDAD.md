@@ -3,7 +3,7 @@
 
 > **Proyecto:** `fuel-forecast`
 > **Fecha de inicio:** 17 de marzo de 2026
-> **Estado actual:** ✅ Producción — v1.3
+> **Estado actual:** ✅ Producción — v1.4
 > **Archivo principal:** `index.html`
 
 ---
@@ -34,7 +34,7 @@ Crear un dashboard web público, accesible desde cualquier navegador, que muestr
 | Goldman Sachs Commodities | Banco de inversión | Precio objetivo Q2 2026 |
 | IEA Oil Market Report | Institucional | Contexto oferta/demanda |
 | Bloomberg (referencia) | Financiero | Datos spot históricos |
-| stooq.com | API pública | Precio en tiempo real (BZ.F) |
+| Yahoo Finance (BZ=F) | Enlace externo | Cotización en vivo (acceso manual del usuario) |
 
 ### 2.2 Datos clave del análisis
 | Fecha | Precio Brent | Evento |
@@ -123,7 +123,7 @@ Intento 3 → Dato estático de referencia ($102, 16 Mar 2026)
 
 ---
 
-### v1.3 — Granularidad quincenal (versión actual)
+### v1.3 — Granularidad quincenal
 **Archivo:** `index.html`
 
 **Cambio solicitado:** Aumentar la granularidad de mensual a quincenal (cada 15 días).
@@ -144,7 +144,55 @@ labels = ["1 Ene","15 Ene","1 Feb","15 Feb","1 Mar","15 Mar",
           "1 Oct","15 Oct","1 Nov","15 Nov","1 Dic","15 Dic"]
 ```
 
-**Estado al terminar:** ✅ Versión actual en producción
+**Estado al terminar:** ✅ Funcional
+
+---
+
+### v1.4 — Eliminación del precio en tiempo real automático *(versión actual)*
+**Archivo:** `index.html`
+
+**Problema detectado:** La barra de precio en vivo mostraba permanentemente:
+```
+⚠ Datos en vivo no disponibles ahora
+```
+
+**Investigación y causa raíz:**
+El precio del crudo Brent en tiempo real es un dato financiero de valor comercial.
+Ninguna fuente pública (Yahoo Finance, stooq, Bloomberg) permite peticiones directas
+desde el navegador: todas bloquean mediante política CORS
+(`Access-Control-Allow-Origin` no incluido en la respuesta).
+
+Los proxies públicos gratuitos implementados en v1.2 (corsproxy.io, allorigins.win)
+resultaron ser inestables en producción: sin SLA, sin garantía de disponibilidad,
+sujetos a bloqueos y saturación según el tráfico de terceros.
+
+**Conclusión técnica:** No existe ninguna solución gratuita, sin registro y fiable
+para obtener precios de crudo en tiempo real desde una página web estática.
+
+**Solución adoptada — rediseño de la barra de precio:**
+
+| Elemento eliminado | Elemento nuevo |
+|--------------------|---------------|
+| Fetch automático a stooq/proxies | Precio actualizado manualmente cada quincena |
+| Spinner de carga CSS | Botón "Ver cotización en vivo ↗" → Yahoo Finance BZ=F |
+| Mensaje de error `⚠ Datos en vivo no disponibles` | Fecha de última actualización visible |
+| `setInterval` cada 5 minutos | Sin dependencias JS de red |
+| Funciones `fetchLivePrice`, `tryCorsproxy`, `tryAllOrigins`, `parseStooqCSV`, `updateUI` | Eliminadas completamente |
+
+**Cambios en el HTML:**
+- Tag header: "Datos en tiempo real · Actualización automática" → "Actualización quincenal · Datos verificados"
+- Barra precio: precio fijo `$102.00` con variación estática vs 28 Feb
+- Enlace externo a `https://finance.yahoo.com/quote/BZ=F/` para cotización en vivo
+- Footer: eliminada referencia a stooq/proxies, añadido enlace a Yahoo Finance
+
+**Instrucción de actualización manual (cada quincena):**
+Editar directamente en `index.html` estas dos líneas:
+```html
+<div class="live-price" id="livePrice">$102.00</div>      ← nuevo precio
+<div class="live-meta" id="liveMeta">Actualizado: 15 Mar 2026</div>  ← nueva fecha
+```
+
+**Estado al terminar:** ✅ Estable, sin errores, sin dependencias externas de red
 
 ---
 
@@ -158,17 +206,16 @@ index.html
 │   └── Google Fonts: DM Mono + Syne
 ├── <body>
 │   ├── .header          — Título y subtítulo
-│   ├── .live-bar        — Precio en tiempo real
+│   ├── .live-bar        — Precio manual + enlace Yahoo Finance
 │   ├── .filters         — Botones de filtro
 │   ├── .chart-box       — Canvas Chart.js
 │   ├── .cards           — 4 tarjetas resumen
 │   └── .footer          — Fuentes + disclaimer
 └── <script>
-    ├── Datos (labels + 4 arrays)
+    ├── Datos (labels + 4 arrays, 24 puntos quincenales)
     ├── warLinePlugin (plugin Chart.js personalizado)
     ├── myChart (instancia Chart.js)
-    ├── setScenario() (lógica de filtros)
-    └── fetchLivePrice() + helpers CORS
+    └── setScenario() (lógica de filtros)
 ```
 
 ### 4.2 Dependencias externas
@@ -178,20 +225,24 @@ index.html
 | DM Mono | 400, 500 | fonts.googleapis.com | Fuente monoespaciada (cuerpo) |
 | Syne | 700, 800 | fonts.googleapis.com | Fuente display (títulos) |
 
-### 4.3 APIs y proxies
-| Servicio | Rol | Autenticación | Límites conocidos |
-|----------|-----|--------------|-------------------|
-| stooq.com (BZ.F) | Precio Brent en tiempo real | Sin API key | Sin documentación oficial de límites |
-| corsproxy.io | Proxy CORS primario | Sin API key | Posible rate limiting en uso intensivo |
-| allorigins.win | Proxy CORS secundario | Sin API key | Posible latencia variable |
+### 4.3 Dependencias de red
+| Servicio | Rol | Tipo de acceso | Estado |
+|----------|-----|---------------|--------|
+| cdnjs.cloudflare.com | Chart.js 4.4.1 | CDN estático | ✅ Estable |
+| fonts.googleapis.com | DM Mono + Syne | CDN estático | ✅ Estable |
+| finance.yahoo.com (BZ=F) | Cotización Brent en vivo | Enlace externo (abre navegador) | ✅ Sin CORS |
+
+> **Nota:** stooq.com, corsproxy.io y allorigins.win fueron eliminados en v1.4
+> por inestabilidad e incompatibilidad CORS en entorno de página estática.
 
 ---
 
 ## 5. Instrucciones de Mantenimiento
 
 ### 5.1 Actualización quincenal de datos reales
-Cada ~15 días, editar el array `realData` en `index.html`:
+Cada ~15 días, realizar **dos acciones** en `index.html`:
 
+**A) Actualizar el array `realData`** añadiendo el nuevo precio:
 ```js
 // Ejemplo: al llegar el 1 de abril de 2026
 // Antes:
@@ -201,20 +252,18 @@ null, null,   // índices 6-7 (1 Abr, 15 Abr)
 91, null,     // 1 Abr = dato real, 15 Abr = pendiente
 ```
 
+**B) Actualizar el precio y fecha en la barra superior:**
+```html
+<div class="live-price" id="livePrice">$91.00</div>
+<div class="live-meta" id="liveMeta">Actualizado: 1 Abr 2026</div>
+```
+
 Subir el archivo actualizado al repositorio de GitHub. GitHub Pages se actualiza
 automáticamente en 1-2 minutos.
 
 ### 5.2 Ajuste de previsiones
 Si el consenso de mercado cambia significativamente, editar `mktData`, `bearData`
 y/o `bullData` con los nuevos valores. Actualizar también las tarjetas resumen en el HTML.
-
-### 5.3 Monitorización de los proxies CORS
-Si el precio en vivo deja de cargarse, verificar en la consola del navegador
-(F12 → Console) qué proxy está fallando. En ese caso:
-- Comprobar disponibilidad de corsproxy.io y allorigins.win
-- Si ambos fallan permanentemente, sustituir por alternativas como:
-  - `https://api.codetabs.com/v1/proxy?quest=<url>`
-  - `https://thingproxy.freeboard.io/fetch/<url>`
 
 ---
 
@@ -245,8 +294,8 @@ Para cada actualización futura:
 |----------|----------------------|--------|
 | HTML puro + Chart.js | React/JSX | React no se renderizó correctamente en el entorno |
 | Archivo único `index.html` | Múltiples ficheros | Simplicidad de despliegue en GitHub Pages |
-| stooq.com como fuente | Yahoo Finance, Alpha Vantage | Sin API key requerida |
-| Proxy CORS en cascada | API con key propia | Evitar registro y coste |
+| Precio actualizado manualmente | Fetch automático con API | No existe API de crudo gratuita con CORS nativo para páginas estáticas |
+| Enlace externo a Yahoo Finance | Proxy CORS en cascada | Los proxies públicos gratuitos son inestables en producción |
 | Granularidad quincenal | Mensual / semanal | Mejor resolución que mensual, menos ruido que semanal |
 | Fondo oscuro navy | Fondo claro | Legibilidad de datos financieros, aspecto profesional |
 | DM Mono + Syne | Inter / Roboto | Carácter diferenciado, aspecto de terminal financiero |
@@ -258,10 +307,11 @@ Para cada actualización futura:
 | # | Problema | Causa | Solución | Versión |
 |---|---------|-------|----------|---------|
 | 1 | Artefacto React invisible | Fallo de renderizado en Claude.ai | Migrar a HTML puro | v1.1 |
-| 2 | `Failed to fetch` en stooq | Política CORS del navegador | Proxies CORS en cascada | v1.2 |
-| 3 | Punto de precio en vivo incorrecto | Cambio de índice al aumentar granularidad | Actualizar índice de `[3]` a `[5]` | v1.3 |
+| 2 | `Failed to fetch` en stooq | Política CORS del navegador al llamar a stooq directamente | Implementar proxies CORS en cascada (corsproxy.io + allorigins.win) | v1.2 |
+| 3 | Punto de precio en vivo incorrecto en gráfica | Cambio de índice al aumentar granularidad de 13 a 24 puntos | Actualizar índice de `[3]` a `[5]` | v1.3 |
+| 4 | "⚠ Datos en vivo no disponibles ahora" permanente | Los proxies públicos gratuitos son inestables; ninguna API de crudo permite CORS nativo gratuito desde páginas estáticas | Eliminar fetch automático; precio manual quincenal + enlace a Yahoo Finance | v1.4 |
 
 ---
 
-*Documento generado el 17 de marzo de 2026.*
+*Documento actualizado el 17 de marzo de 2026 — v1.4.*
 *Actualizar este informe con cada cambio significativo en el proyecto.*
